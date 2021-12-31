@@ -1,6 +1,7 @@
 //DOM
-const $ = document.querySelector.bind(document);
+const $d = document.querySelector.bind(document);
 const API_UPLOAD_FILE = "http://localhost:8080/api/excel/upload";
+const API_DATA_UPLOADTED = "http://localhost:8080/api/excel/preApprovals";
 //APP
 let App = {};
 App.init = (function () {
@@ -37,61 +38,228 @@ App.init = (function () {
       )
       .join("")}`;
 
-    $("#drop").classList.add("hidden");
-    $("footer").classList.add("hasFiles");
-    $(".importar").classList.add("active");
+    $d("#drop").classList.add("hidden");
+    $d("footer").classList.add("hasFiles");
+    $d(".importar").classList.add("active");
+    localStorage.removeItem("timeStart");
     setTimeout(() => {
-      $(".list-files").innerHTML = template;
+      $d(".list-files").innerHTML = template;
     }, 1000);
-
-    Object.keys(files).forEach((file) => {
+    let numSuccess = 0;
+    Object.keys(files).forEach((file, indexFile) => {
       let load = 1000 + file * 1000; // fake load
       setTimeout(() => {
         uploadFile(files[file])
           .then((res) => {
-            $(`.file--${file}`)
+            $d(`.file--${file}`)
               .querySelector(".progress")
               .classList.remove("active");
-            $(`.file--${file}`).querySelector(".done").classList.add("anim");
-            $(`.file--${file}`).querySelector(".done").querySelector(".success").classList.remove("hidden");
-            console.log(res);
+            $d(`.file--${file}`).querySelector(".done").classList.add("anim");
+            $d(`.file--${file}`)
+              .querySelector(".done")
+              .querySelector(".success")
+              .classList.remove("hidden");
+            if (res.timeStart && !numSuccess) {
+              localStorage.setItem("timeStart", res.timeStart);
+            }
+            numSuccess++;
           })
           .catch((error) => {
             if (error && error.message) {
-              $(`.file--${file}`).querySelector(".message-error").innerText =
+              $d(`.file--${file}`).querySelector(".message-error").innerText =
                 error.message;
             }
-            $(`.file--${file}`).classList.add("error");
-            $(`.file--${file}`)
+            $d(`.file--${file}`).classList.add("error");
+            $d(`.file--${file}`)
               .querySelector(".progress")
               .classList.remove("active");
-            $(`.file--${file}`)
+            $d(`.file--${file}`)
               .querySelector(".progress")
               .classList.add("error");
-            $(`.file--${file}`).querySelector(".done").classList.add("anim");
-            $(`.file--${file}`).querySelector(".done").querySelector(".error").classList.remove("hidden");
+            $d(`.file--${file}`).querySelector(".done").classList.add("anim");
+            $d(`.file--${file}`)
+              .querySelector(".done")
+              .querySelector(".error")
+              .classList.remove("hidden");
             console.log(error);
+          })
+          .finally(() => {
+            if (indexFile + 1 == files.length && numSuccess) {
+              handleGetData();
+            }
+            console.log("Experiment completed");
+            $(evt.target).val(null);
           });
       }, load);
-      //   let load = 2000 + file * 2000; // fake load
-      //   setTimeout(() => {}, load);
     });
   }
+
+  const handleGetData = (page = 0, size = 5, filterBy = "", sortBy = "") => {
+    const table = $(".data-table");
+
+    const loading = () => {
+      const loadEl = $(".loader__wrap");
+      const show = () => {
+        setTimeout(() => {
+          loadEl.removeClass("hidden");
+        }, 200);
+      };
+      const hidden = () => {
+        loadEl.addClass("hidden");
+      };
+      return { show, hidden };
+    };
+
+    // build pagination
+    const buildPagination = (totalPage, currentPage = 1) => {
+      let pagination = $(".pagination");
+      $(pagination).empty();
+      if (!totalPage) {
+        return;
+      }
+      // add previous button
+      let previousBtn = document.createElement("span");
+      $(previousBtn).html("&laquo;");
+      $(previousBtn).on("click", (event) => {
+        event.preventDefault();
+        let active = $(pagination).attr("item-active");
+        if (active > 0) {
+          active--;
+          let { size, filterBy } = getDataFilter();
+          handleGetData(active, size, filterBy);
+        }
+      });
+      $(pagination).append(previousBtn);
+      // add item page btn
+      $(pagination).removeClass("hidden");
+      for (let index = 1; index <= totalPage; index++) {
+        let page = document.createElement("span");
+        let currentIndex = index - 1;
+        $(page).text(index);
+        $(page).on("click", (event) => {
+          event.preventDefault();
+          let { size, filterBy } = getDataFilter();
+          handleGetData(currentIndex, size, filterBy);
+        });
+        if (currentIndex == currentPage) {
+          $(page).addClass("active");
+          $(pagination).attr("item-active", currentIndex);
+        }
+        $(pagination).append(page);
+      }
+      // add next btn
+      let nextBtn = document.createElement("span");
+      $(nextBtn).html("&raquo;");
+      $(nextBtn).on("click", (event) => {
+        event.preventDefault();
+        let active = $(pagination).attr("item-active");
+        if (active) {
+          active++;
+          if (active < totalPage) {
+            let { size, filterBy } = getDataFilter();
+            handleGetData(active, size, filterBy);
+          }
+        }
+      });
+      $(pagination).append(nextBtn);
+    };
+
+    // build data table
+    const buildDataTable = (lstHeaders, details, totalItems = 0) => {
+      let tempTableBody = $(".data-table-body");
+      let temTableHeader = $(".data-table-header");
+      $(temTableHeader).empty();
+      $(tempTableBody).empty();
+      $(table).removeClass("hidden");
+
+      // build header
+      let head = document.createElement("tr");
+      let keyHeader = lstHeaders.map((item) => {
+        item["key"];
+        $(head).addClass("row100 head");
+        $(head).append(`<th class="cell100">${item["display"]}</th>`);
+        $(temTableHeader).append(head);
+        return item;
+      });
+
+      // build data table
+      details.forEach((data) => {
+        if (keyHeader && keyHeader.length) {
+          let row = document.createElement("tr");
+          keyHeader.forEach((header, index) => {
+            $(row).addClass("row100 body");
+            $(row).append(`<td class="cell100">${data[header["key"]]}</td>`);
+            $(tempTableBody).append(row);
+          });
+        }
+      });
+      $(".toltal-record").text(`Toltal number of data: ${totalItems}`);
+    };
+
+    // build filter by column name
+    const buildFilterColumn = (lstHeaders, filterBy) => {
+      let selectBoxFilterColumn = $(".filter-column");
+      $(selectBoxFilterColumn).empty();
+      $(selectBoxFilterColumn).append(
+        '<option value="">Select column</option>'
+      );
+      if (lstHeaders && lstHeaders.length) {
+        lstHeaders.forEach((item, index) => {
+          let elOption = document.createElement("option");
+          $(elOption).attr("value", item["key"]);
+          $(elOption).text(item["display"]);
+          $(selectBoxFilterColumn).append(elOption);
+        });
+      } else {
+        $(selectBoxFilterColumn).append("<option>No data selected</option>");
+      }
+      if (filterBy) {
+        $(selectBoxFilterColumn).val(filterBy["column"]);
+      }
+    };
+
+    loading().show();
+
+    getData(page, size, filterBy, sortBy)
+      .then((res) => {
+        setTimeout(() => {
+          buildDataTable(res.lstHeaders, res.details, res.totalItems);
+          buildPagination(res.totalPages, res.currentPage);
+          buildFilterColumn(res.lstHeaders, res.filterBy);
+          if (res && res.details && res.details.length) {
+            $(".no-data").addClass("hidden");
+          } else {
+            $(".no-data").removeClass("hidden");
+          }
+          loading().hidden();
+          $(table).removeClass("hidden");
+        }, 1000);
+      })
+      .catch((error) => {
+        console.log(error);
+        table.removeClass("hidden");
+      })
+      .finally(() => {
+        setTimeout(() => {
+          loading().hidden();
+        }, 1000);
+      });
+  };
+
+  const handellerError = (error) => {
+    console.warn(error);
+    return new Response(
+      JSON.stringify({
+        code: 400,
+        message: "Stupid network Error",
+      })
+    );
+  };
 
   // send file to server
   const uploadFile = async (file) => {
     let formData = new FormData();
     formData.append("file", file);
-
-    const handellerError = (error) => {
-      console.warn(error);
-      return new Response(
-        JSON.stringify({
-          code: 400,
-          message: "Stupid network Error",
-        })
-      );
-    };
 
     const response = await fetch(API_UPLOAD_FILE, {
       body: formData,
@@ -107,40 +275,104 @@ App.init = (function () {
     }
   };
 
+  // get data hasbeen upload
+  const getData = async (page, size, filterBy, sortBy) => {
+    let timeStart = localStorage.getItem("timeStart");
+    const response = await fetch(API_DATA_UPLOADTED, {
+      method: "post",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        page: page,
+        size: size,
+        timeStart: timeStart ? timeStart : "",
+        filterBy,
+        sortBy,
+      }),
+    }).catch(handellerError);
+
+    const myjson = await response.json().catch(handellerError);
+
+    if (response.ok) {
+      return myjson;
+    } else {
+      return Promise.reject(myjson);
+    }
+  };
+
+  const getDataFilter = () => {
+    let columnTitle = $(".filter-column").val();
+    let columnValue = $(".filter-search").val();
+    let activePage = $(".pagination").attr("item-active");
+    let numFilterRows = $(".filter-row").val();
+    console.log(columnValue);
+    let filterBy = {};
+    if (columnValue && columnTitle) {
+      filterBy.column = columnTitle;
+      filterBy.value = columnValue;
+    }
+    if (isEmpty(filterBy)) {
+      filterBy = "";
+    }
+    return { page: activePage, size: numFilterRows, filterBy };
+  };
+
+  const isEmpty = (obj) => {
+    for (var key in obj) {
+      if (obj.hasOwnProperty(key)) return false;
+    }
+    return true;
+  };
+
   // trigger input
-  $("#triggerFile").addEventListener("click", (evt) => {
+  $d("#triggerFile").addEventListener("click", (evt) => {
     evt.preventDefault();
-    $("input[type=file]").click();
+    $d("input[type=file]").click();
   });
 
   // drop events
-  $("#drop").ondragleave = (evt) => {
-    $("#drop").classList.remove("active");
+  $d("#drop").ondragleave = (evt) => {
+    $d("#drop").classList.remove("active");
     evt.preventDefault();
   };
-  $("#drop").ondragover = $("#drop").ondragenter = (evt) => {
-    $("#drop").classList.add("active");
+  $d("#drop").ondragover = $d("#drop").ondragenter = (evt) => {
+    $d("#drop").classList.add("active");
     evt.preventDefault();
   };
-  $("#drop").ondrop = (evt) => {
-    $("input[type=file]").files = evt.dataTransfer.files;
-    $("footer").classList.add("hasFiles");
-    $("#drop").classList.remove("active");
+  $d("#drop").ondrop = (evt) => {
+    $d("input[type=file]").files = evt.dataTransfer.files;
+    $d("footer").classList.add("hasFiles");
+    $d("#drop").classList.remove("active");
     evt.preventDefault();
   };
 
   //upload more
-  $(".importar").addEventListener("click", () => {
-    $(".list-files").innerHTML = "";
-    $("footer").classList.remove("hasFiles");
-    $(".importar").classList.remove("active");
+  $d(".importar").addEventListener("click", () => {
+    $d(".list-files").innerHTML = "";
+    $d("footer").classList.remove("hasFiles");
+    $d(".importar").classList.remove("active");
     setTimeout(() => {
-      $("#drop").classList.remove("hidden");
+      $d("#drop").classList.remove("hidden");
     }, 500);
   });
 
   // input change
-  $("input[type=file]").addEventListener("change", handleFileSelect);
+  $d("input[type=file]").addEventListener("change", handleFileSelect);
 
-  
+  // select filter row on selected
+  $(".filter-row").on("change", (event) => {
+    event.preventDefault();
+    let selectBox = event.target;
+    let { filterBy } = getDataFilter();
+    handleGetData(0, selectBox.value, filterBy);
+  });
+
+  // on click btn filter by column
+  $(".filter-btn").on("click", (event) => {
+    event.preventDefault();
+    let { page, size, filterBy } = getDataFilter();
+    handleGetData( 0 , size, filterBy);
+  });
 })();
