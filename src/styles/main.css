@@ -453,6 +453,9 @@ th,
 td {
   min-width: 200px;
 }
+th:hover {
+  cursor: pointer;
+}
 .no-data {
   text-align: center;
 }

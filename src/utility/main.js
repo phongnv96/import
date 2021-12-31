@@ -125,8 +125,8 @@ App.init = (function () {
         let active = $(pagination).attr("item-active");
         if (active > 0) {
           active--;
-          let { size, filterBy } = getDataFilter();
-          handleGetData(active, size, filterBy);
+          let { size, filterBy, sortBy } = getDataFilter();
+          handleGetData(active, size, filterBy, sortBy);
         }
       });
       $(pagination).append(previousBtn);
@@ -138,8 +138,8 @@ App.init = (function () {
         $(page).text(index);
         $(page).on("click", (event) => {
           event.preventDefault();
-          let { size, filterBy } = getDataFilter();
-          handleGetData(currentIndex, size, filterBy);
+          let { size, filterBy, sortBy } = getDataFilter();
+          handleGetData(currentIndex, size, filterBy, sortBy);
         });
         if (currentIndex == currentPage) {
           $(page).addClass("active");
@@ -156,8 +156,8 @@ App.init = (function () {
         if (active) {
           active++;
           if (active < totalPage) {
-            let { size, filterBy } = getDataFilter();
-            handleGetData(active, size, filterBy);
+            let { size, filterBy, sortBy } = getDataFilter();
+            handleGetData(active, size, filterBy, sortBy);
           }
         }
       });
@@ -165,7 +165,7 @@ App.init = (function () {
     };
 
     // build data table
-    const buildDataTable = (lstHeaders, details, totalItems = 0) => {
+    const buildDataTable = (lstHeaders, details, totalItems = 0, sortBy) => {
       let tempTableBody = $(".data-table-body");
       let temTableHeader = $(".data-table-header");
       $(temTableHeader).empty();
@@ -175,9 +175,50 @@ App.init = (function () {
       // build header
       let head = document.createElement("tr");
       let keyHeader = lstHeaders.map((item) => {
-        item["key"];
+        // item["key"];
         $(head).addClass("row100 head");
-        $(head).append(`<th class="cell100">${item["display"]}</th>`);
+        let th = document.createElement("th");
+        $(th).text(item["display"]);
+        if (sortBy) {
+          if (item.key == sortBy.column) {
+            if (sortBy.value == "DESC") {
+              $(th).append('<i class="fa fa-chevron-down"/>');
+            } else {
+              $(th).append('<i class="fa fa-chevron-up"/>');
+            }
+          }
+        }
+        $(th).on("click", (event) => {
+          event.preventDefault();
+          let { page, size, filterBy } = getDataFilter();
+          let sortBy = {};
+          let header = $(".data-table-header");
+          let isSort = $(th).find("i").length ? true : false;
+          sortBy.column = item["key"];
+          if (isSort) {
+            if ($(th).find("i").hasClass("fa-chevron-down")) {
+              $(th).find("i").remove();
+              $(th).append('<i class="fa fa-chevron-up"/>');
+              sortBy.value = "ASC";
+              $(header).attr("order-column", item.key);
+              $(header).attr("order-value", "ASC");
+            } else {
+              $(th).find("i").remove();
+              $(th).append('<i class="fa fa-chevron-down"/>');
+              sortBy.value = "DESC";
+              $(header).attr("order-column", item.key);
+              $(header).attr("order-value", "DESC");
+            }
+          } else {
+            sortBy.value = "DESC";
+            $(header).find("i").remove();
+            $(th).append('<i class="fa fa-chevron-down"></i>');
+            $(header).attr("order-column", item.key);
+            $(header).attr("order-value", "DESC");
+          }
+          handleGetData(0, size, filterBy, sortBy);
+        });
+        $(head).append(th);
         $(temTableHeader).append(head);
         return item;
       });
@@ -193,6 +234,7 @@ App.init = (function () {
           });
         }
       });
+
       $(".toltal-record").text(`Toltal number of data: ${totalItems}`);
     };
 
@@ -223,7 +265,12 @@ App.init = (function () {
     getData(page, size, filterBy, sortBy)
       .then((res) => {
         setTimeout(() => {
-          buildDataTable(res.lstHeaders, res.details, res.totalItems);
+          buildDataTable(
+            res.lstHeaders,
+            res.details,
+            res.totalItems,
+            res.sortBy
+          );
           buildPagination(res.totalPages, res.currentPage);
           buildFilterColumn(res.lstHeaders, res.filterBy);
           if (res && res.details && res.details.length) {
@@ -306,9 +353,12 @@ App.init = (function () {
     let columnTitle = $(".filter-column").val();
     let columnValue = $(".filter-search").val();
     let activePage = $(".pagination").attr("item-active");
+    let header = $(".data-table-header");
     let numFilterRows = $(".filter-row").val();
-    console.log(columnValue);
+    let sortBy = {};
     let filterBy = {};
+    sortBy.column = $(header).attr("order-column");
+    sortBy.value = $(header).attr("order-value");
     if (columnValue && columnTitle) {
       filterBy.column = columnTitle;
       filterBy.value = columnValue;
@@ -316,7 +366,10 @@ App.init = (function () {
     if (isEmpty(filterBy)) {
       filterBy = "";
     }
-    return { page: activePage, size: numFilterRows, filterBy };
+    if (isEmpty(sortBy)) {
+      sortBy = "";
+    }
+    return { page: activePage, size: numFilterRows, filterBy, sortBy };
   };
 
   const isEmpty = (obj) => {
@@ -365,14 +418,14 @@ App.init = (function () {
   $(".filter-row").on("change", (event) => {
     event.preventDefault();
     let selectBox = event.target;
-    let { filterBy } = getDataFilter();
-    handleGetData(0, selectBox.value, filterBy);
+    let { filterBy, sortBy } = getDataFilter();
+    handleGetData(0, selectBox.value, filterBy, sortBy);
   });
 
   // on click btn filter by column
   $(".filter-btn").on("click", (event) => {
     event.preventDefault();
-    let { page, size, filterBy } = getDataFilter();
-    handleGetData( 0 , size, filterBy);
+    let { page, size, filterBy, sortBy } = getDataFilter();
+    handleGetData(0, size, filterBy, sortBy);
   });
 })();

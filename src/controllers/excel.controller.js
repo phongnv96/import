@@ -85,7 +85,7 @@ const getPreApprovals = (req, res) => {
       condition.where[filterBy.column] = { [Op.substring]: filterBy.value };
     }
     if (sortBy) {
-      condition.order = [`${sortBy.column}`, `${sortBy.value}`]
+      condition.order = [[`${sortBy.column}`, `${sortBy.value}`]]
     }
   } else {
     res.send({ details: [], lstHeaders });
@@ -94,7 +94,7 @@ const getPreApprovals = (req, res) => {
   PreApproval.findAndCountAll({ ...condition })
     .then((data) => {
       const response = pagination.getPagingData(data, page, limit);
-      res.send({ ...response, lstHeaders , filterBy });
+      res.send({ ...response, lstHeaders , filterBy, sortBy });
     })
     .catch((err) => {
       res.status(500).send({
